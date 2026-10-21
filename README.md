@@ -56,6 +56,6 @@ That runs the command as the user who invoked sudo. The unit stays root: `User=`
 
 ### Service fails at `ip netns add` / `mount --make-shared /run/netns`
 
-The unit needs **`CAP_SYS_ADMIN`** (see `systemd/netns-singbox.service`). After updating the unit: `sudo task install` (or copy the unit file) and `sudo systemctl daemon-reload && sudo systemctl restart netns-singbox`.
+The unit needs **`CAP_SYS_ADMIN`** (see `systemd/netns-singbox.service`). After updating the unit: `sudo task install`, then `sudo task stop` and `sudo task start`. `install` reloads systemd; `stop` and `start` pick up the new unit.
 
 Source is this directory (`src/main.rs`). The owner-stamp protocol it shares with `runns` lives in the [`runns`](../runns/) library.
