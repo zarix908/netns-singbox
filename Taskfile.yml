@@ -1,0 +1,115 @@
+version: "3"
+
+vars:
+  PREFIX: /opt/netns-singbox
+  BIN: "{{.TASKFILE_DIR}}/target/release/netns-singbox"
+  RUNNS_BIN: "{{.TASKFILE_DIR}}/../runns/target/release/runns"
+  SYSTEMD_UNIT: /etc/systemd/system/netns-singbox.service
+
+tasks:
+  default:
+    desc: List tasks
+    cmds:
+      - task --list
+
+  build:
+    desc: Build netns-singbox release binary
+    dir: "{{.TASKFILE_DIR}}"
+    sources:
+      - src/**/*
+      - Cargo.toml
+      - Cargo.lock
+      - ../runns/src/**/*.rs
+      - ../runns/Cargo.toml
+      - ../runns/Cargo.lock
+    generates:
+      - target/release/netns-singbox
+    cmds:
+      - cargo build --release --bin netns-singbox
+
+  test:
+    desc: cargo test
+    dir: "{{.TASKFILE_DIR}}"
+    cmds:
+      - cargo test
+
+  install:
+    desc: Install release binary to /opt/netns-singbox (sudo; run task build first)
+    preconditions:
+      - sh: test "$(id -u)" -eq 0
+        msg: "Run as root, e.g. sudo task install"
+      - sh: test -f {{.BIN}}
+        msg: "Missing {{.BIN}} — run task build first"
+    cmds:
+      - install -d {{.PREFIX}}/bin
+      - install -m 755 {{.BIN}} {{.PREFIX}}/bin/netns-singbox
+      - install -m 644 {{.TASKFILE_DIR}}/env.example {{.PREFIX}}/env.example
+      - task: install:env
+      - install -m 644 {{.TASKFILE_DIR}}/README.md {{.PREFIX}}/README.md
+      - install -m 644 {{.TASKFILE_DIR}}/systemd/netns-singbox.service {{.SYSTEMD_UNIT}}
+      - systemctl daemon-reload
+      - systemctl enable netns-singbox.service
+      - task: install:runns
+      - echo "Installed {{.PREFIX}}. Add {{.PREFIX}}/bin/tun2socks, set NETNS_USER in {{.PREFIX}}/env, then task start"
+
+  install:runns:
+    internal: true
+    cmds:
+      - |
+        bin="{{.RUNNS_BIN}}"
+        if [ ! -x "$bin" ]; then
+          echo "runns binary missing — build it, then: sudo task runns:install"
+          exit 0
+        fi
+        install -m 755 "$bin" /usr/local/bin/runns
+        if ! command -v setcap >/dev/null; then
+          echo "setcap not found (install libcap2-bin); /usr/local/bin/runns has no cap_sys_admin" >&2
+          exit 0
+        fi
+        setcap cap_sys_admin+ep /usr/local/bin/runns
+        setcap -v cap_sys_admin+ep /usr/local/bin/runns
+
+  install:env:
+    internal: true
+    status:
+      - test -f {{.PREFIX}}/env
+    cmds:
+      - install -m 644 {{.TASKFILE_DIR}}/env.example {{.PREFIX}}/env
+      - echo "Created {{.PREFIX}}/env"
+
+  uninstall:
+    desc: Disable service, remove unit file and /opt/netns-singbox (sudo)
+    preconditions:
+      - sh: test "$(id -u)" -eq 0
+        msg: "Run as root, e.g. sudo task uninstall"
+    cmds:
+      - systemctl disable --now netns-singbox.service 2>/dev/null || true
+      - rm -f {{.SYSTEMD_UNIT}}
+      - rm -rf {{.PREFIX}}
+      - systemctl daemon-reload
+
+  start:
+    desc: Start systemd unit (sudo)
+    preconditions:
+      - sh: test "$(id -u)" -eq 0
+        msg: "Run as root, e.g. sudo task start"
+    cmds:
+      - systemctl start netns-singbox.service
+
+  stop:
+    desc: Stop systemd unit (sudo)
+    preconditions:
+      - sh: test "$(id -u)" -eq 0
+        msg: "Run as root, e.g. sudo task stop"
+    cmds:
+      - systemctl stop netns-singbox.service
+
+  status:
+    desc: systemctl status
+    cmds:
+      - systemctl status netns-singbox.service --no-pager
+
+  logs:
+    desc: journalctl follow
+    cmds:
+      - journalctl -u netns-singbox.service -e --no-pager

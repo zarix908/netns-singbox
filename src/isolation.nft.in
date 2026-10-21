@@ -1,0 +1,24 @@
+flush ruleset
+
+table inet nsisol {
+  chain input {
+    type filter hook input priority filter; policy drop;
+    iif "lo" accept
+    ct state established,related accept
+  }
+
+  chain forward {
+    type filter hook forward priority filter; policy drop;
+  }
+
+  chain output {
+    type filter hook output priority filter; policy drop;
+    oif "lo" accept
+    ct state established,related accept
+    # Application traffic must leave via TUN (default route → tun2socks).
+    oifname "tun*" accept
+    # Only tun2socks may reach Docker SOCKS on the host (--fwmark).
+    oifname "@VETH_NS@" meta mark @SOCKS_ROUTING_MARK@ tcp dport @SOCKS_PORT@ ip daddr @SOCKS_HOST@ accept
+    oifname "@VETH_NS@" meta mark @SOCKS_ROUTING_MARK@ udp dport @SOCKS_PORT@ ip daddr @SOCKS_HOST@ accept
+  }
+}

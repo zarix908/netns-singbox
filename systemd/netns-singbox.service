@@ -1,0 +1,26 @@
+[Unit]
+Description=Isolated netns (TUN → Docker sing-box via tun2socks)
+Documentation=file:///opt/netns-singbox/README.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Stay root. User= would drop the privileges used to build the veth, TUN, and
+# nftables rules, and that account's shell still could not join the namespace.
+# NETNS_USER in the env file is who may enter with runns; the unit records their
+# uid in /run/netns-singbox/$NETNS_NAME.user for the life of the service.
+WorkingDirectory=/opt/netns-singbox
+EnvironmentFile=-/opt/netns-singbox/env
+RuntimeDirectory=netns-singbox
+RuntimeDirectoryMode=0755
+ExecStart=/opt/netns-singbox/bin/netns-singbox
+Restart=on-failure
+RestartSec=3
+# ip netns add bind-mounts under /run/netns (needs CAP_SYS_ADMIN, not only CAP_NET_ADMIN)
+AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=no
+
+[Install]
+WantedBy=multi-user.target

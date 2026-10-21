@@ -1,0 +1,15 @@
+[package]
+name = "netns-singbox"
+version = "0.1.0"
+edition = "2021"
+description = "Isolated netns with TUN and tun2socks to Docker sing-box SOCKS"
+
+[dependencies]
+libc = "0.2"
+runns = { path = "../runns", version = "0.1.0" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
